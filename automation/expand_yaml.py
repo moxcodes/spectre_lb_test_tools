@@ -19,13 +19,14 @@ def expand_yaml_string(string):
     post_expansion = string[len(pre_expansion) + 4 + len(first_expansion):]
     if "#!" in first_expansion:
         tag = first_expansion.split("#!")[1].split("#!")[0]
+        print(tag)
         all_expansions = [
             x.split("#>")[0] for x in string.split("#!" + tag + "#!")[1:]
         ]
         remaining_strings = string.split("#!" + tag + "#!")
         for i in range(1, len(remaining_strings)):
             remaining_strings[i] = "".join(
-                remaining_strings[i].split("#>")[1:])
+                re.split("(#>)", remaining_strings[i])[2:])
         for i in range(len(remaining_strings) - 1):
             remaining_strings[i] = remaining_strings[i][:-2]
     else:
