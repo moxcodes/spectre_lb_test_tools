@@ -1,0 +1,17 @@
+# EXECUTABLE_STRING=srun -c 1 -N #<#!p#!1#,1#,1#,1#,1#,1#,1#,1#,2#> -n #<#!p#!2#,3#,4#,8#,12#,16#,20#,24#,48#> bash -c "singularity exec -B /home/moxon:/home/moxon /home/moxon/spectrebuildenv_latest.sif /home/moxon/spectre/spectre_build/bin/SimpleLoadBalancerTest1D +ppn#<#!p#!1#,2#,3#,7#,11#,15#,19#,23#,46#> --input-file ./p_#<#!p#!#"p#"2#,3#,4#,8#,12#,16#,20#,24#,48#>_com_#<#!com#!#"com#"200#,1000#,2000#,10000#,20000#>_lb_test.yaml 2>&1 > ./p_#<#!p#!2#,3#,4#,8#,12#,16#,20#,24#,48#>_com_#<#!com#!200#,1000#,2000#,10000#,20000#>_lb_test.out"
+
+TestLoadBalancing:
+  NumberOfSteps: 100
+  ExecutionLoad: 1000
+  InternalStorageSize: 10
+  CommunicationSize: #<#!com#!200#,1000#,2000#,10000#,20000#>
+  DistributionStrategy:
+    KnownEvenOptimal
+
+DomainCreator:
+  Interval:
+    LowerBound: [-1.0]
+    UpperBound: [1.0]
+    IsPeriodicIn: [true]
+    InitialRefinement: [7]
+    InitialGridPoints: [7]

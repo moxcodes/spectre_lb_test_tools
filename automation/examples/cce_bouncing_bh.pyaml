@@ -1,0 +1,30 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Evolution:
+  TimeStepper: RungeKutta3
+
+Cce:
+  ObservationLMax: #<#!lm#!10#:24#:2#>
+  LMax: #<#!lm#!#"lmax#"12#:26#:2#>
+  NumberOfRadialPoints: 12
+
+  InitializeJ:
+    InverseCubic
+
+  StartTime: 0.0
+  EndTime: 40.0
+  TargetStepSize: 0.05
+  BoundaryDataFilename: CceR0010.h5
+
+  Filtering:
+    RadialFilterHalfPower: 24
+    RadialFilterAlpha: 32.0
+    FilterLMax: #<#!lm#!10#:24#:2#>
+  OutputNoninertial: true
+
+  ExtractionRadius: 30
+
+Observers:
+  VolumeFileName: "cce_bouncing_bh_"
+  ReductionFileName: "CceTestReduction_"
