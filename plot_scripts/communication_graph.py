@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 
-def parse_user_defined_projections_to_dict_graph(projections_file, dict_graph):
+def parse_user_defined_projections_to_dict_graph(projections_file,
+                                                 dict_graph_list):
     # unzip it if it's a gz.
     if (projections_file[-3:] == ".gz"):
         subprocess.run(["gunzip", "-k", "-f", projections_file])
@@ -28,6 +29,7 @@ def parse_user_defined_projections_to_dict_graph(projections_file, dict_graph):
     global_clock_start = None
     global_clock_end = None
     current_from_component = None
+    current_graph_index = None
     while i < len(file_contents):
         # the 'begin processing flag' -- tells us about the current
         if file_contents[i][:2] == "2 ":
@@ -38,7 +40,8 @@ def parse_user_defined_projections_to_dict_graph(projections_file, dict_graph):
                 if global_clock_start is None:
                     global_clock_start = clock_start
                 global_clock_end = int(file_contents[i].split(" ")[3])
-                dict_graph[current_from_component].add_clock_ticks(clock_diff)
+                dict_graph_list[current_graph_index][
+                    current_from_component].add_clock_ticks(clock_diff)
                 current_from_component = None
 
         if file_contents[i][:2] == "26" and file_contents[i][3:5] == "-1":
@@ -49,35 +52,53 @@ def parse_user_defined_projections_to_dict_graph(projections_file, dict_graph):
                 data_packet += [file_contents[i].split(" ")[1]]
                 i += 1
             dim = int((len(data_packet) - 3) / 2)
-            from_component_tag = gi.ComponentTag(":".join(data_packet[1:(dim +
-                                                                         2)]))
+            if current_graph_index is not None and int(
+                    data_packet[0]) != current_graph_index:
+                for key in dict_graph_list[current_graph_index]:
+                    print("key: " + str(key))
+                    dict_graph_list[current_graph_index][
+                        key].record_global_ticks(global_clock_end -
+                                                 global_clock_start)
+                global_clock_start = None
+                global_clock_end = None
+                current_from_component = None
+            current_graph_index = int(data_packet[0])
+            if len(dict_graph_list) <= current_graph_index:
+                dict_graph_list += [{}]
+
+            from_component_tag = gi.ComponentTag(":".join(data_packet[2:(dim +
+                                                                         3)]))
             to_component_tag = gi.ComponentTag(":".join(
-                data_packet[(dim + 2):(2 * dim + 3)]))
+                data_packet[(dim + 3):(2 * dim + 4)]))
             print("from component")
             print(str(from_component_tag))
             print("to component")
             print(str(to_component_tag))
-            print("insert? " + str(from_component_tag in dict_graph))
-            if from_component_tag in dict_graph:
-                dict_graph[from_component_tag].insert_neighbor(
-                    gi.BidirectionalEdgeInfo(from_component_tag,
-                                             to_component_tag))
+            print("insert? " + str(
+                from_component_tag in dict_graph_list[current_graph_index]))
+            if from_component_tag in dict_graph_list[current_graph_index]:
+                dict_graph_list[current_graph_index][
+                    from_component_tag].insert_neighbor(
+                        gi.BidirectionalEdgeInfo(from_component_tag,
+                                                 to_component_tag))
             else:
                 print("inserting new")
-                dict_graph[from_component_tag] = gi.GraphElementInfo(
-                    from_component_tag, int(data_packet[0]),
-                    gi.BidirectionalEdgeInfo(from_component_tag,
-                                             to_component_tag))
-                print("insert? " + str(from_component_tag in dict_graph))
+                dict_graph_list[current_graph_index][
+                    from_component_tag] = gi.GraphElementInfo(
+                        from_component_tag, int(data_packet[1]),
+                        gi.BidirectionalEdgeInfo(from_component_tag,
+                                                 to_component_tag))
+                print("insert? " + str(from_component_tag in
+                                       dict_graph_list[current_graph_index]))
             current_from_component = from_component_tag
         else:
             i += 1
 
-    for key in dict_graph:
+    for key in dict_graph_list[current_graph_index]:
         print("key: " + str(key))
-        dict_graph[key].record_global_ticks(global_clock_end -
-                                            global_clock_start)
-    return dict_graph
+        dict_graph_list[current_graph_index][key].record_global_ticks(
+            global_clock_end - global_clock_start)
+    return dict_graph_list
 
 
 def collapse_graph(dict_graph):
@@ -120,86 +141,95 @@ def collapse_graph(dict_graph):
 
 
 def plot_communication_graph(projections_dir, output_file):
-    dict_graph = {}
+    dict_graph_list = [{}]
     projections_logs = fm.find_files(projections_dir, "*\.log\.gz")
     for projection_log in projections_logs:
         parse_user_defined_projections_to_dict_graph(projection_log,
-                                                     dict_graph)
-    collapse_graph(dict_graph)
-    print(dict_graph)
-    G = nx.Graph()
-    labels = {}
-    node_sizes = []
+                                                     dict_graph_list)
+    dict_graph_index = 0
+    for dict_graph in dict_graph_list:
+        collapse_graph(dict_graph)
+        print("graph size:")
+        print(len(dict_graph))
+        G = nx.Graph()
+        labels = {}
+        node_sizes = []
 
-    node_avg_loads = []
-    node_colors = []
+        node_avg_loads = []
+        node_colors = []
 
-    coms_per_element = []
-    node_border_colors = []
-    for key in dict_graph:
-        G.add_node(key, pe=dict_graph[key].pe)
-        labels[key] = str(dict_graph[key].pe)
-        print(labels[key])
+        coms_per_element = []
+        node_border_colors = []
+        for key in dict_graph:
+            G.add_node(key, pe=dict_graph[key].pe)
+            labels[key] = str(dict_graph[key].pe)
+            print(labels[key])
 
-    print()
-    for node in G.nodes():
-        print(len(dict_graph[node].merged_component_set))
-        node_sizes += [
-            len(dict_graph[node].merged_component_set) * 1500 /
-            np.sqrt(len(dict_graph))
-        ]
-        node_avg_loads += [
-            dict_graph[node].load_portion() /
-            len(dict_graph[node].merged_component_set)
-        ]
-        total_coms = 0
-        for edge in dict_graph[node].neighbors:
-            total_coms += edge.weight
-        coms_per_element += [
-            total_coms / len(dict_graph[node].merged_component_set)
-        ]
+        print()
+        for node in G.nodes():
+            print(len(dict_graph[node].merged_component_set))
+            node_sizes += [
+                len(dict_graph[node].merged_component_set) * 1500 /
+                np.sqrt(len(dict_graph))
+            ]
+            node_avg_loads += [
+                dict_graph[node].load_portion() /
+                len(dict_graph[node].merged_component_set)
+            ]
+            total_coms = 0
+            for edge in dict_graph[node].neighbors:
+                total_coms += edge.weight
+            coms_per_element += [
+                total_coms / len(dict_graph[node].merged_component_set)
+            ]
 
-    max_avg_load = max(node_avg_loads)
-    max_coms_per_element = max(coms_per_element)
-    # TODO create a color legend
-    for node_avg_load in node_avg_loads:
-        node_colors += [
-            matplotlib.colors.to_hex([
-                1.0 * (node_avg_load / max_avg_load), 0.0,
-                1.0 * (1.0 - node_avg_load / max_avg_load)
-            ])
-        ]
-    for coms in coms_per_element:
-        node_border_colors += [
-            matplotlib.colors.to_hex([
-                0.0, 1.0 * (1.0 - coms / max_coms_per_element),
-                1.0 * (coms / max_coms_per_element)
-            ])
-        ]
+        max_avg_load = max(node_avg_loads)
+        max_coms_per_element = max(coms_per_element)
+        # TODO create a color legend
+        for node_avg_load in node_avg_loads:
+            node_colors += [
+                matplotlib.colors.to_hex([
+                    1.0 * (node_avg_load / max_avg_load), 0.0,
+                    1.0 * (1.0 - node_avg_load / max_avg_load)
+                ])
+            ]
+        for coms in coms_per_element:
+            node_border_colors += [
+                matplotlib.colors.to_hex([
+                    0.0, 1.0 * (1.0 - coms / max_coms_per_element),
+                    1.0 * (coms / max_coms_per_element)
+                ])
+            ]
 
-    edge_set = set()
-    for key in dict_graph:
-        for edge in dict_graph[key].neighbors:
-            if edge not in edge_set:
-                G.add_edge(edge.first_component,
-                           edge.second_component,
-                           weight=edge.weight)
-                edge_set.add(edge)
+        edge_set = set()
+        for key in dict_graph:
+            for edge in dict_graph[key].neighbors:
+                if edge not in edge_set:
+                    G.add_edge(edge.first_component,
+                               edge.second_component,
+                               weight=edge.weight)
+                    edge_set.add(edge)
 
-    edge_weights = [G[u][v]['weight'] for u, v in G.edges()]
-    pos = nx.spring_layout(G,
-                           k=1 / np.sqrt(len(G.nodes()) * 4),
-                           iterations=500,
-                           threshold=1e-8)
-    nx.draw(G,
-            pos=pos,
-            node_size=node_sizes,
-            node_color=node_colors,
-            edgecolors=node_border_colors,
-            linewidths=3.0,
-            width=edge_weights)
-    nx.draw_networkx_labels(G, pos, labels)
-    plt.savefig(output_file)
+        edge_weights = [G[u][v]['weight'] for u, v in G.edges()]
+        pos = nx.spring_layout(G,
+                               k=1 / np.sqrt(len(G.nodes()) * 4),
+                               iterations=500,
+                               threshold=1e-8)
+        nx.draw(G,
+                pos=pos,
+                node_size=node_sizes,
+                node_color=node_colors,
+                edgecolors=node_border_colors,
+                linewidths=3.0,
+                width=edge_weights)
+        nx.draw_networkx_labels(G, pos, labels)
+        if output_file[-4:] == ".pdf":
+            plt.savefig(output_file[:-4] + "_" + str(dict_graph_index) +
+                        ".pdf")
+        else:
+            plt.savefig(output_file + "_" + str(dict_graph_index) + ".pdf")
+        plt.clf()
+        dict_graph_index += 1
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ class BidirectionalEdgeInfo:
             self.second_component = new
             return
 
-        
+
 class GraphElementInfo:
     def __init__(self, component_tag, pe, first_neighbor=None):
         self.component_tag = component_tag
