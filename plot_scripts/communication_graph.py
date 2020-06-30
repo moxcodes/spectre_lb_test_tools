@@ -148,6 +148,7 @@ def plot_communication_graph(projections_dir, output_file):
                                                      dict_graph_list)
     dict_graph_index = 0
     for dict_graph in dict_graph_list:
+        plt.rcParams["figure.figsize"] = 6.5, 4
         collapse_graph(dict_graph)
         print("graph size:")
         print(len(dict_graph))
@@ -184,22 +185,40 @@ def plot_communication_graph(projections_dir, output_file):
             ]
 
         max_avg_load = max(node_avg_loads)
+        min_avg_load = min(node_avg_loads)
         max_coms_per_element = max(coms_per_element)
+        min_coms_per_element = min(coms_per_element)
+        load_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+            "load_cmap", [matplotlib.colors.to_hex([0.3, 0.3, 1.0]), 'red'])
+        com_score_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+            "com_score_cmap", [
+                matplotlib.colors.to_hex([0.0, 1.0, 0.0]),
+                matplotlib.colors.to_hex([0.3, 0.3, 1.0])
+            ])
         # TODO create a color legend
         for node_avg_load in node_avg_loads:
-            node_colors += [
-                matplotlib.colors.to_hex([
-                    1.0 * (node_avg_load / max_avg_load), 0.0,
-                    1.0 * (1.0 - node_avg_load / max_avg_load)
-                ])
-            ]
+            if max_avg_load != min_avg_load:
+                node_colors += [
+                    matplotlib.colors.to_hex(
+                        load_cmap((node_avg_load - min_avg_load) /
+                                  (max_avg_load - min_avg_load)))
+                ]
+            else:
+                node_colors += [matplotlib.colors.to_hex([0.5, 0.0, 0.5])]
+
+        print(coms_per_element)
         for coms in coms_per_element:
-            node_border_colors += [
-                matplotlib.colors.to_hex([
-                    0.0, 1.0 * (1.0 - coms / max_coms_per_element),
-                    1.0 * (coms / max_coms_per_element)
-                ])
-            ]
+            if max_coms_per_element != min_coms_per_element:
+                node_border_colors += [
+                    matplotlib.colors.to_hex(
+                        com_score_cmap(
+                            (coms - min_coms_per_element) /
+                            (max_coms_per_element - min_coms_per_element)))
+                ]
+            else:
+                node_border_colors += [
+                    matplotlib.colors.to_hex([0.0, 0.5, 0.5])
+                ]
 
         edge_set = set()
         for key in dict_graph:
@@ -223,6 +242,17 @@ def plot_communication_graph(projections_dir, output_file):
                 linewidths=3.0,
                 width=edge_weights)
         nx.draw_networkx_labels(G, pos, labels)
+        load_cbar = plt.colorbar(matplotlib.cm.ScalarMappable(
+            matplotlib.colors.Normalize(min_avg_load, max_avg_load),
+            load_cmap),
+                                 shrink=0.9)
+        load_cbar.set_label("average element load fraction (centers)")
+        com_cbar = plt.colorbar(matplotlib.cm.ScalarMappable(
+            matplotlib.colors.Normalize(min_coms_per_element,
+                                        max_coms_per_element), com_score_cmap),
+                                shrink=0.9)
+        com_cbar.set_label("number of communications per element (borders)")
+        plt.gcf().subplots_adjust()
         if output_file[-4:] == ".pdf":
             plt.savefig(output_file[:-4] + "_" + str(dict_graph_index) +
                         ".pdf")
