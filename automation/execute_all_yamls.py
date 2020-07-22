@@ -26,9 +26,11 @@ def execute_all_in_sequence(directory):
             "# EXECUTABLE_STRING=")[1].split("\n")[0].lstrip().rstrip()
         if dry_run:
             print("dry run; would have executed:")
-            print(shlex.quote(executable_string))
+            print(executable_string)
         else:
-            subprocess.run(shlex.quote(executable_string),
+            print("running")
+            print(executable_string)
+            subprocess.run(executable_string,
                            shell=True)
 
 
