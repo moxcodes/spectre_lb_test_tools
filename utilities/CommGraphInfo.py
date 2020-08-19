@@ -27,6 +27,9 @@ class ComponentTag:
     def __eq__(self, other):
         return self.tag_string == other.tag_string
 
+    def __ne__(self, other):
+        return self.tag_string != other.tag_string
+
 
 class BidirectionalEdgeInfo:
     def __init__(self, from_component_tag, to_component_tag, weight=1):
@@ -39,16 +42,33 @@ class BidirectionalEdgeInfo:
     def other(self, component_tag):
         if (self.first_component == component_tag):
             return self.second_component
-        else:
+        elif (self.second_component == component_tag):
             return self.first_component
+        else:
+            raise RuntimeError("other call in edge is ambiguous")
 
     def reassign(self, previous, new):
         if self.first_component == previous:
             self.first_component = new
-            return
         if self.second_component == previous:
             self.second_component = new
-            return
+        tags = [self.first_component, self.second_component]
+        tags.sort()
+        self.first_component = tags[0]
+        self.second_component = tags[1]
+        return
+
+    def __eq__(self, other):
+        return self.first_component == other.first_component\
+          and self.second_component == other.second_component
+
+    def __ne__(self, other):
+        return self.first_component != other.first_component\
+          or self.second_component != other.second_component
+
+    def __hash__(self):
+        return hash(self.first_component.tag_string +
+                    self.second_component.tag_string)
 
 
 class GraphElementInfo:
@@ -65,8 +85,7 @@ class GraphElementInfo:
     # 'bundles' duplicate edges into weights
     def insert_neighbor(self, neighbor):
         for local_neighbor in self.neighbors:
-            if (local_neighbor.first_component ==
-                    neighbor.first_component
+            if (local_neighbor.first_component == neighbor.first_component
                     and local_neighbor.second_component ==
                     neighbor.second_component):
                 local_neighbor.weight += neighbor.weight

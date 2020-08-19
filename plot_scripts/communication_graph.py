@@ -74,22 +74,20 @@ def parse_user_defined_projections_to_dict_graph(projections_file,
             print(str(from_component_tag))
             print("to component")
             print(str(to_component_tag))
-            print("insert? " + str(
-                from_component_tag in dict_graph_list[current_graph_index]))
-            if from_component_tag in dict_graph_list[current_graph_index]:
-                dict_graph_list[current_graph_index][
-                    from_component_tag].insert_neighbor(
-                        gi.BidirectionalEdgeInfo(from_component_tag,
-                                                 to_component_tag))
-            else:
-                print("inserting new")
-                dict_graph_list[current_graph_index][
-                    from_component_tag] = gi.GraphElementInfo(
-                        from_component_tag, int(data_packet[1]),
-                        gi.BidirectionalEdgeInfo(from_component_tag,
-                                                 to_component_tag))
-                print("insert? " + str(from_component_tag in
-                                       dict_graph_list[current_graph_index]))
+            print(" ")
+            if from_component_tag != to_component_tag:
+                if from_component_tag in dict_graph_list[current_graph_index]:
+                    dict_graph_list[current_graph_index][
+                        from_component_tag].insert_neighbor(
+                            gi.BidirectionalEdgeInfo(from_component_tag,
+                                                     to_component_tag))
+                else:
+                    print("inserting new")
+                    dict_graph_list[current_graph_index][
+                        from_component_tag] = gi.GraphElementInfo(
+                            from_component_tag, int(data_packet[1]),
+                            gi.BidirectionalEdgeInfo(from_component_tag,
+                                                     to_component_tag))
             current_from_component = from_component_tag
         else:
             i += 1
@@ -101,8 +99,33 @@ def parse_user_defined_projections_to_dict_graph(projections_file,
     return dict_graph_list
 
 
+def check_graph_bidir(dict_graph):
+    for key in dict_graph:
+        print("checking: " + str(key))
+        for edge in dict_graph[key].neighbors:
+            print("checking edge: " + str(edge.other(key)))
+            for neighbor_edge in dict_graph[edge.other(key)].neighbors:
+                print("neighbor edge: " +
+                      str(neighbor_edge.other(edge.other(key))))
+            if edge not in dict_graph[edge.other(key)].neighbors:
+                raise RuntimeError(
+                    "graph is not bidirectional! Something is wrong with"\
+                    " the logs or the parsing."
+                )
+
+
+def deduplicate_neighbors(graph, key):
+    print("deduplicating neighbors: " + str(key))
+    # it's easiest to just create a new node with the elements re-inserted
+    neighbor_list = graph[key].neighbors
+    graph[key].neighbors = []
+    for neighbor in neighbor_list:
+        graph[key].insert_neighbor(neighbor)
+
+
 def collapse_graph(dict_graph):
     previous_size = len(dict_graph) + 1
+    print("")
     while (len(dict_graph) != previous_size):
         previous_size = len(dict_graph)
         print("collapsing iteration start")
@@ -110,8 +133,13 @@ def collapse_graph(dict_graph):
             print("trying to collapse " + str(key))
             next_nodes = dict_graph[key].neighbors
             breaking_out = False
+            node_set = set()
             for node in next_nodes:
                 print("considering: " + str(node.other(key)))
+                if node.other(key) in node_set:
+                    raise RuntimeError(
+                        "Duplicate key found while merging the graph.")
+                node_set.add(node.other(key))
                 if dict_graph[node.other(key)].pe == dict_graph[key].pe:
                     other_key = node.other(key)
                     print("merging: " + str(other_key))
@@ -123,6 +151,7 @@ def collapse_graph(dict_graph):
                         for neighbor_edge in dict_graph[edge.other(
                                 other_key)].neighbors:
                             neighbor_edge.reassign(other_key, key)
+                        deduplicate_neighbors(dict_graph, edge.other(other_key))
                         edge.reassign(other_key, key)
                         dict_graph[key].insert_neighbor(edge)
 
@@ -132,6 +161,7 @@ def collapse_graph(dict_graph):
                     for edge in dict_graph[key].neighbors:
                         if edge.other(key) == key:
                             dict_graph[key].neighbors.remove(edge)
+                    deduplicate_neighbors(dict_graph, key)
                     dict_graph.pop(other_key)
                     breaking_out = True
                     break
@@ -149,6 +179,7 @@ def plot_communication_graph(projections_dir, output_file):
     dict_graph_index = 0
     for dict_graph in dict_graph_list:
         plt.rcParams["figure.figsize"] = 6.5, 4
+        check_graph_bidir(dict_graph)
         collapse_graph(dict_graph)
         print("graph size:")
         print(len(dict_graph))
